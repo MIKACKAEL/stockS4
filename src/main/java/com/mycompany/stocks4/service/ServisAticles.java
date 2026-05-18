@@ -97,17 +97,40 @@ public class ServisAticles {
         validateIdArticle(idArticle);
         try (Connection connection = DBstock.getConnection()) {
             ensureConnection(connection);
-            if (strictDelete && hasMouvements(connection, idArticle)) {
-                throw new IllegalStateException(
-                        "Suppression interdite: des mouvements existent deja pour cet article.");
-            }
+            boolean originalAutoCommit = true;
+            try {
+                originalAutoCommit = connection.getAutoCommit();
+                connection.setAutoCommit(false);
 
-            String sql = "DELETE FROM articles WHERE id_article = ?";
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setInt(1, idArticle);
-                int deleted = statement.executeUpdate();
-                if (deleted == 0) {
-                    throw new IllegalArgumentException("Article introuvable pour id=" + idArticle);
+                String deleteMouvementsSql = "DELETE FROM mouvements_stock WHERE id_article = ?";
+                try (PreparedStatement stmt = connection.prepareStatement(deleteMouvementsSql)) {
+                    stmt.setInt(1, idArticle);
+                    stmt.executeUpdate();
+                }
+
+                String sql = "DELETE FROM articles WHERE id_article = ?";
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setInt(1, idArticle);
+                    int deleted = statement.executeUpdate();
+                    if (deleted == 0) {
+                        connection.rollback();
+                        throw new IllegalArgumentException("Article introuvable pour id=" + idArticle);
+                    }
+                }
+
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException ex) {
+                    // ignore rollback error
+                }
+                throw e;
+            } finally {
+                try {
+                    connection.setAutoCommit(originalAutoCommit);
+                } catch (SQLException ex) {
+                    // ignore
                 }
             }
         }

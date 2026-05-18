@@ -77,3 +77,40 @@
 - Le **CUMP est recalculé** car il y a une **entrée**.
 
 **CUMP (au 5 Mai) :** *(à compléter selon votre méthode exacte d’arrondi et les valeurs précédentes)*
+
+
+
+LIFO (Last In, First Out)
+Méthode de sortie de stock où les derniers articles entrés sont les premiers à sortir.
+Exemple : tu achètes 10 unités puis plus tard 5 unités → si tu sors 3 unités, on considère que ça vient d’abord du lot des 5 unités (le plus récent).
+
+FIFO (First In, First Out)
+Méthode de sortie de stock où les premiers articles entrés sont les premiers à sortir.
+Exemple : tu achètes 10 unités puis plus tard 5 unités → si tu sors 3 unités, on considère que ça vient d’abord du lot des 10 unités (le plus ancien).
+
+PU (Prix Unitaire)
+C’est le prix d’une seule unité de l’article.
+Exemple : si 10 biscuits coûtent 1 100 Ar, alors PU = 110 Ar par biscuit.
+
+CUMP (Coût Unitaire Moyen Pondéré)
+C’est le coût moyen d’une unité en stock, calculé en tenant compte des quantités achetées à différents prix (moyenne “pondérée”).
+
+Il est recalculé à chaque entrée (achat/approvisionnement).
+Formule (après une nouvelle entrée) :
+CUMP = (Valeur du stock actuel + Valeur de la nouvelle entrée) / (Quantité stock actuelle + Quantité entrée)
+
+
+### lancement 
+
+
+-- mvn clean package
+-- mvn dependency:copy-dependencies
+-- mvn compile -q 2>&1
+-- java -cp "target/classes;target/dependency/*" com.mycompany.stocks4.StockS4
+-- mvn -q exec:java
+
+<!-- Règles de sortie aplique cette exemple 
+- **Lorsqu'on fait une sortie**, la **PU utilisée** devient la **dernière CUMP**.
+  - Exemple : au **3 Mai**, **CUMP = 113,88**  
+    → lors de la **sortie du 4 Mai**, la **PU = 113,88**.
+    corrige le cump pour une resulta correcte et aplique ces Règles de sortie pour chaque gestion de stock  -->

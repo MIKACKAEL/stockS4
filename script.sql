@@ -1,6 +1,6 @@
 CREATE DATABASE db_stock;
 \c db_stock;
-
+\dt
 -- 1) Types ENUM
 CREATE TYPE mode_gestion_stock AS ENUM ('FIFO', 'LIFO', 'CUMP');
 CREATE TYPE type_mouvement_stock AS ENUM ('ENTREE', 'SORTIE');
@@ -33,11 +33,6 @@ CREATE TABLE mouvements_stock (
 CREATE INDEX idx_mvt_article_date ON mouvements_stock(id_article, date_mouvement, id_mouvement);
 CREATE INDEX idx_mvt_articlesource ON mouvements_stock(source);
 
--- java -cp "target/classes;target/dependency/*" com.mycompany.stocks4.StockS4
--- mvn -q exec:java
--- mvn clean package
--- mvn dependency:copy-dependencies
--- mvn compile -q 2>&1
 
-
-
+DELETE FROM articles;
+DELETE FROM mouvements_stock;

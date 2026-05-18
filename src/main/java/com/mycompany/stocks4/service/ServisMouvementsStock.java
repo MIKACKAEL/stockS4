@@ -193,18 +193,26 @@ public class ServisMouvementsStock {
         BigDecimal stockApres = scaleQte(precedent.stockApres().subtract(qte));
         BigDecimal prixUnitaire;
         BigDecimal valeurTotal;
+        BigDecimal valeurStock;
+        BigDecimal cumpApres;
 
         if (modeGestion == ModeGestionStock.CUMP) {
             prixUnitaire = scaleMoney(precedent.cumpApres());
             valeurTotal = scaleMoney(qte.multiply(prixUnitaire));
+            cumpApres = precedent.cumpApres();
+            valeurStock = scaleMoney(stockApres.multiply(cumpApres));
         } else {
             ValorisationSortie valorisation = valoriserSortieParLots(connection, idArticle, modeGestion, qte);
-            valeurTotal = valorisation.valeurTotale();
+            valeurTotal = valorisation.valeurTotaleSortie();
             prixUnitaire = scaleMoney(valeurTotal.divide(qte, SCALE_MONEY, RoundingMode.HALF_UP));
+            valeurStock = valorisation.valeurStockRestant();
+            if (stockApres.compareTo(ZERO) > 0) {
+                cumpApres = valeurStock.divide(stockApres, SCALE_CUMP, RoundingMode.HALF_UP);
+            } else {
+                cumpApres = ZERO;
+            }
         }
 
-        BigDecimal cumpApres = precedent.cumpApres();
-        BigDecimal valeurStock = scaleMoney(stockApres.multiply(cumpApres));
         return new CalculMouvement(prixUnitaire, valeurTotal, stockApres, scaleCump(cumpApres), valeurStock);
     }
 
@@ -234,7 +242,14 @@ public class ServisMouvementsStock {
             throw new IllegalStateException("Impossible de valoriser la sortie (lots insuffisants).");
         }
 
-        return new ValorisationSortie(scaleMoney(total));
+        BigDecimal valeurStockRestant = ZERO;
+        for (LotVirtuel lot : lots) {
+            if (lot.quantiteRestante.compareTo(ZERO) > 0) {
+                valeurStockRestant = valeurStockRestant.add(lot.quantiteRestante.multiply(lot.prixUnitaire));
+            }
+        }
+
+        return new ValorisationSortie(scaleMoney(total), scaleMoney(valeurStockRestant));
     }
 
     private List<LotVirtuel> buildLotsRestants(Connection connection, int idArticle, ModeGestionStock modeGestion) throws SQLException {
@@ -447,7 +462,8 @@ public class ServisMouvementsStock {
                                    BigDecimal valeurStock) {
     }
 
-    private record ValorisationSortie(BigDecimal valeurTotale) {
+    private record ValorisationSortie(BigDecimal valeurTotaleSortie,
+                                      BigDecimal valeurStockRestant) {
     }
 
     private static final class LotVirtuel {
