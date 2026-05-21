@@ -1,3 +1,4 @@
+DROP DATABASE db_stock;
 CREATE DATABASE db_stock;
 \c db_stock;
 \dt
