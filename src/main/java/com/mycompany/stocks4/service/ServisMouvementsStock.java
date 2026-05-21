@@ -34,25 +34,40 @@ public class ServisMouvementsStock {
             ensureConnection(connection);
             connection.setAutoCommit(false);
             try {
-                ModeGestionStock modeGestion = getModeGestionArticle(connection, idArticle)
-                        .orElseThrow(() -> new IllegalArgumentException("Article introuvable pour id=" + idArticle));
-
-                if (source != null) {
-                    validateSource(connection, source);
-                }
-
-                EtatStock precedent = getEtatPrecedent(connection, idArticle);
-                CalculMouvement calc;
-                if (typeMouvement == TypeMouvementStock.ENTREE) {
-                    calc = calculerEntree(precedent, quantite, prixUnitaireEntree);
-                } else {
-                    calc = calculerSortie(connection, idArticle, modeGestion, precedent, quantite);
-                }
-
-                BigDecimal quantiteNormalisee = scaleQte(quantite);
-                MouvementsStock mouvement = insertMouvement(connection, idArticle, dateMouvement, typeMouvement, quantiteNormalisee, calc, source);
+                MouvementsStock mouvement = createMouvementInternal(connection, idArticle, dateMouvement,
+                        typeMouvement, quantite, prixUnitaireEntree, source);
                 connection.commit();
                 return mouvement;
+            } catch (Exception ex) {
+                connection.rollback();
+                if (ex instanceof SQLException sqlEx) {
+                    throw sqlEx;
+                }
+                throw ex;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    public List<MouvementsStock> createMouvementsBatch(List<BatchMouvementInput> mouvements) throws SQLException {
+        if (mouvements == null || mouvements.isEmpty()) {
+            throw new IllegalArgumentException("Aucun mouvement a valider.");
+        }
+
+        try (Connection connection = DBstock.getConnection()) {
+            ensureConnection(connection);
+            connection.setAutoCommit(false);
+            try {
+                List<MouvementsStock> resultat = new ArrayList<>();
+                for (BatchMouvementInput input : mouvements) {
+                    validateCommonInputs(input.idArticle(), input.dateMouvement(), input.typeMouvement(), input.quantite());
+                    MouvementsStock mouvement = createMouvementInternal(connection, input.idArticle(), input.dateMouvement(),
+                            input.typeMouvement(), input.quantite(), input.prixUnitaireEntree(), input.source());
+                    resultat.add(mouvement);
+                }
+                connection.commit();
+                return resultat;
             } catch (Exception ex) {
                 connection.rollback();
                 if (ex instanceof SQLException sqlEx) {
@@ -180,77 +195,80 @@ public class ServisMouvementsStock {
         return new CalculMouvement(pu, valeurTotal, stockApres, scaleCump(cumpApres), valeurStock);
     }
 
-    private CalculMouvement calculerSortie(Connection connection,
-                                           int idArticle,
-                                           ModeGestionStock modeGestion,
-                                           EtatStock precedent,
-                                           BigDecimal quantite) throws SQLException {
+    private CalculMouvement calculerSortieCump(EtatStock precedent, BigDecimal quantite) {
         BigDecimal qte = scaleQte(quantite);
         if (precedent.stockApres().compareTo(qte) < 0) {
             throw new IllegalStateException("Stock insuffisant. Stock actuel=" + precedent.stockApres() + ", demande=" + qte);
         }
 
         BigDecimal stockApres = scaleQte(precedent.stockApres().subtract(qte));
-        BigDecimal prixUnitaire;
-        BigDecimal valeurTotal;
-        BigDecimal valeurStock;
-        BigDecimal cumpApres;
-
-        if (modeGestion == ModeGestionStock.CUMP) {
-            prixUnitaire = scaleMoney(precedent.cumpApres());
-            valeurTotal = scaleMoney(qte.multiply(prixUnitaire));
-            cumpApres = precedent.cumpApres();
-            valeurStock = scaleMoney(stockApres.multiply(cumpApres));
-        } else {
-            ValorisationSortie valorisation = valoriserSortieParLots(connection, idArticle, modeGestion, qte);
-            valeurTotal = valorisation.valeurTotaleSortie();
-            prixUnitaire = scaleMoney(valeurTotal.divide(qte, SCALE_MONEY, RoundingMode.HALF_UP));
-            valeurStock = valorisation.valeurStockRestant();
-            if (stockApres.compareTo(ZERO) > 0) {
-                cumpApres = valeurStock.divide(stockApres, SCALE_CUMP, RoundingMode.HALF_UP);
-            } else {
-                cumpApres = ZERO;
-            }
-        }
+        BigDecimal prixUnitaire = scaleMoney(precedent.cumpApres());
+        BigDecimal valeurTotal = scaleMoney(qte.multiply(prixUnitaire));
+        BigDecimal cumpApres = precedent.cumpApres();
+        BigDecimal valeurStock = scaleMoney(stockApres.multiply(cumpApres));
 
         return new CalculMouvement(prixUnitaire, valeurTotal, stockApres, scaleCump(cumpApres), valeurStock);
     }
 
-    private ValorisationSortie valoriserSortieParLots(Connection connection,
-                                                      int idArticle,
-                                                      ModeGestionStock modeGestion,
-                                                      BigDecimal quantiteSortie) throws SQLException {
-        List<LotVirtuel> lots = buildLotsRestants(connection, idArticle, modeGestion);
-        BigDecimal restant = quantiteSortie;
-        BigDecimal total = ZERO;
+    private MouvementsStock createMouvementInternal(Connection connection,
+                                                    int idArticle,
+                                                    Date dateMouvement,
+                                                    TypeMouvementStock typeMouvement,
+                                                    BigDecimal quantite,
+                                                    BigDecimal prixUnitaireEntree,
+                                                    Integer source) throws SQLException {
+        ModeGestionStock modeGestion = getModeGestionArticle(connection, idArticle)
+                .orElseThrow(() -> new IllegalArgumentException("Article introuvable pour id=" + idArticle));
 
-        int index = modeGestion == ModeGestionStock.FIFO ? 0 : lots.size() - 1;
-        int step = modeGestion == ModeGestionStock.FIFO ? 1 : -1;
+        if (source != null) {
+            validateSource(connection, source);
+        }
 
-        while (index >= 0 && index < lots.size() && restant.compareTo(ZERO) > 0) {
-            LotVirtuel lot = lots.get(index);
-            if (lot.quantiteRestante.compareTo(ZERO) > 0) {
-                BigDecimal consommee = lot.quantiteRestante.min(restant);
-                total = total.add(consommee.multiply(lot.prixUnitaire));
-                lot.quantiteRestante = lot.quantiteRestante.subtract(consommee);
-                restant = restant.subtract(consommee);
+        EtatStock precedent = getEtatPrecedent(connection, idArticle);
+        CalculMouvement calc;
+
+        if (typeMouvement == TypeMouvementStock.ENTREE) {
+            calc = calculerEntree(precedent, quantite, prixUnitaireEntree);
+        } else {
+            if (modeGestion == ModeGestionStock.CUMP) {
+                calc = calculerSortieCump(precedent, quantite);
+            } else {
+                List<SortiePortion> portions = buildSortiePortions(connection, idArticle, modeGestion, scaleQte(quantite), source);
+                BigDecimal stockCourant = precedent.stockApres();
+                BigDecimal valeurStockCourant = scaleMoney(precedent.stockApres().multiply(precedent.cumpApres()));
+                MouvementsStock dernier = null;
+
+                for (SortiePortion portion : portions) {
+                    stockCourant = scaleQte(stockCourant.subtract(portion.quantite()));
+                    valeurStockCourant = scaleMoney(valeurStockCourant.subtract(portion.quantite().multiply(portion.prixUnitaire())));
+                    BigDecimal cumpApres = stockCourant.compareTo(ZERO) > 0
+                            ? valeurStockCourant.divide(stockCourant, SCALE_CUMP, RoundingMode.HALF_UP)
+                            : ZERO;
+
+                    calc = new CalculMouvement(
+                            scaleMoney(portion.prixUnitaire()),
+                            scaleMoney(portion.quantite().multiply(portion.prixUnitaire())),
+                            stockCourant,
+                            scaleCump(cumpApres),
+                            valeurStockCourant
+                    );
+
+                    BigDecimal quantiteNormalisee = scaleQte(portion.quantite());
+                    dernier = insertMouvement(connection, idArticle, dateMouvement, typeMouvement, quantiteNormalisee, calc, portion.sourceId());
+                }
+
+                if (dernier == null) {
+                    throw new IllegalStateException("Aucune portion a enregistrer pour la sortie.");
+                }
+
+                return dernier;
             }
-            index += step;
         }
 
-        if (restant.compareTo(ZERO) > 0) {
-            throw new IllegalStateException("Impossible de valoriser la sortie (lots insuffisants).");
-        }
-
-        BigDecimal valeurStockRestant = ZERO;
-        for (LotVirtuel lot : lots) {
-            if (lot.quantiteRestante.compareTo(ZERO) > 0) {
-                valeurStockRestant = valeurStockRestant.add(lot.quantiteRestante.multiply(lot.prixUnitaire));
-            }
-        }
-
-        return new ValorisationSortie(scaleMoney(total), scaleMoney(valeurStockRestant));
+        BigDecimal quantiteNormalisee = scaleQte(quantite);
+        return insertMouvement(connection, idArticle, dateMouvement, typeMouvement, quantiteNormalisee, calc, source);
     }
+
 
     private List<LotVirtuel> buildLotsRestants(Connection connection, int idArticle, ModeGestionStock modeGestion) throws SQLException {
         String sql = "SELECT type_mouvement, quantite, prix_unitaire FROM mouvements_stock "
@@ -277,6 +295,87 @@ public class ServisMouvementsStock {
             Collections.reverse(lots);
         }
         return lots;
+    }
+
+    private List<LotVirtuel> buildLotsRestantsAvecSource(Connection connection, int idArticle, ModeGestionStock modeGestion) throws SQLException {
+        String sql = "SELECT id_mouvement, type_mouvement, quantite, prix_unitaire FROM mouvements_stock "
+                + "WHERE id_article = ? ORDER BY date_mouvement, id_mouvement";
+
+        List<LotVirtuel> lots = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, idArticle);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    int idMouvement = rs.getInt("id_mouvement");
+                    TypeMouvementStock type = TypeMouvementStock.valueOf(rs.getString("type_mouvement"));
+                    BigDecimal quantite = scaleQte(rs.getBigDecimal("quantite"));
+                    BigDecimal prixUnitaire = scaleMoney(rs.getBigDecimal("prix_unitaire"));
+
+                    if (type == TypeMouvementStock.ENTREE) {
+                        lots.add(new LotVirtuel(idMouvement, quantite, prixUnitaire));
+                    } else {
+                        consommerLots(lots, quantite, modeGestion);
+                    }
+                }
+            }
+        }
+        if (modeGestion == ModeGestionStock.LIFO) {
+            Collections.reverse(lots);
+        }
+        return lots;
+    }
+
+    private List<SortiePortion> buildSortiePortions(Connection connection,
+                                                    int idArticle,
+                                                    ModeGestionStock modeGestion,
+                                                    BigDecimal quantiteSortie,
+                                                    Integer sourceId) throws SQLException {
+        List<LotVirtuel> lots = buildLotsRestantsAvecSource(connection, idArticle, modeGestion);
+        BigDecimal restant = quantiteSortie;
+        List<SortiePortion> portions = new ArrayList<>();
+
+        if (sourceId != null) {
+            LotVirtuel lotSource = null;
+            for (LotVirtuel lot : lots) {
+                if (lot.idMouvement != null && lot.idMouvement.equals(sourceId)) {
+                    lotSource = lot;
+                    break;
+                }
+            }
+
+            if (lotSource == null || lotSource.quantiteRestante.compareTo(ZERO) <= 0) {
+                throw new IllegalStateException("Source introuvable ou epuisée: id_mouvement=" + sourceId);
+            }
+
+            BigDecimal consommee = lotSource.quantiteRestante.min(restant);
+            portions.add(new SortiePortion(sourceId, consommee, lotSource.prixUnitaire));
+            lotSource.quantiteRestante = lotSource.quantiteRestante.subtract(consommee);
+            restant = restant.subtract(consommee);
+        }
+
+        int index = modeGestion == ModeGestionStock.FIFO ? 0 : lots.size() - 1;
+        int step = modeGestion == ModeGestionStock.FIFO ? 1 : -1;
+
+        while (index >= 0 && index < lots.size() && restant.compareTo(ZERO) > 0) {
+            LotVirtuel lot = lots.get(index);
+            if (sourceId != null && lot.idMouvement != null && lot.idMouvement.equals(sourceId)) {
+                index += step;
+                continue;
+            }
+            if (lot.quantiteRestante.compareTo(ZERO) > 0) {
+                BigDecimal consommee = lot.quantiteRestante.min(restant);
+                portions.add(new SortiePortion(lot.idMouvement, consommee, lot.prixUnitaire));
+                lot.quantiteRestante = lot.quantiteRestante.subtract(consommee);
+                restant = restant.subtract(consommee);
+            }
+            index += step;
+        }
+
+        if (restant.compareTo(ZERO) > 0) {
+            throw new IllegalStateException("Impossible de valoriser la sortie (lots insuffisants).");
+        }
+
+        return portions;
     }
 
     private void consommerLots(List<LotVirtuel> lots, BigDecimal quantiteASortir, ModeGestionStock modeGestion) {
@@ -308,6 +407,7 @@ public class ServisMouvementsStock {
             throw new IllegalStateException("Historique incoherent: sorties > entrees.");
         }
     }
+
 
     private MouvementsStock insertMouvement(Connection connection,
                                             int idArticle,
@@ -369,6 +469,7 @@ public class ServisMouvementsStock {
                 if (rs.next()) {
                     return new EtatStock(scaleQte(rs.getBigDecimal("stock_apres")), scaleCump(rs.getBigDecimal("cump_apres")));
                 }
+                // if (stost== fifo){entre = null } else {entre = null};
             }
         }
         return new EtatStock(scaleQte(ZERO), scaleCump(ZERO));
@@ -401,6 +502,7 @@ public class ServisMouvementsStock {
             }
         }
     }
+
 
     private MouvementsStock mapMouvement(ResultSet rs) throws SQLException {
         return new MouvementsStock(
@@ -462,18 +564,26 @@ public class ServisMouvementsStock {
                                    BigDecimal valeurStock) {
     }
 
-    private record ValorisationSortie(BigDecimal valeurTotaleSortie,
-                                      BigDecimal valeurStockRestant) {
-    }
 
     private static final class LotVirtuel {
         private BigDecimal quantiteRestante;
         private final BigDecimal prixUnitaire;
+        private final Integer idMouvement;
 
         private LotVirtuel(BigDecimal quantiteRestante, BigDecimal prixUnitaire) {
+            this(null, quantiteRestante, prixUnitaire);
+        }
+
+        private LotVirtuel(Integer idMouvement, BigDecimal quantiteRestante, BigDecimal prixUnitaire) {
             this.quantiteRestante = quantiteRestante;
             this.prixUnitaire = prixUnitaire;
+            this.idMouvement = idMouvement;
         }
+    }
+
+    private record SortiePortion(Integer sourceId,
+                                 BigDecimal quantite,
+                                 BigDecimal prixUnitaire) {
     }
 
     public record GlobalStockRow(int idArticle,
@@ -487,5 +597,13 @@ public class ServisMouvementsStock {
                                  BigDecimal quantite,
                                  BigDecimal prixUnitaire,
                                  BigDecimal valeurLigne) {
+    }
+
+    public record BatchMouvementInput(int idArticle,
+                                      Date dateMouvement,
+                                      TypeMouvementStock typeMouvement,
+                                      BigDecimal quantite,
+                                      BigDecimal prixUnitaireEntree,
+                                      Integer source) {
     }
 }

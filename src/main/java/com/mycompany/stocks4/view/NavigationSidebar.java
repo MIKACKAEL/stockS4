@@ -34,7 +34,7 @@ public final class NavigationSidebar {
         titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
         titlePanel.setBackground(ModernTheme.SIDEBAR_BG);
         titlePanel.setBorder(new EmptyBorder(20, 15, 20, 15));
-        JLabel appTitle = new JLabel("\u2693 StockS4");
+        JLabel appTitle = new JLabel("Gestion Stock");
         appTitle.setFont(ModernTheme.FONT_TITLE);
         appTitle.setForeground(ModernTheme.ACCENT);
         appTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -54,10 +54,10 @@ public final class NavigationSidebar {
         buttons.setBackground(ModernTheme.SIDEBAR_BG);
         buttons.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        JButton btnArticles = ModernTheme.navButton("\uD83D\uDCE6  Articles", currentView == ViewKey.ARTICLES);
-        JButton btnMouvements = ModernTheme.navButton("\uD83D\uDD04  Mouvements", currentView == ViewKey.MOUVEMENTS);
-        JButton btnGlobal = ModernTheme.navButton("\uD83D\uDCCA  Stock Global", currentView == ViewKey.GLOBAL);
-        JButton btnDetail = ModernTheme.navButton("\uD83D\uDD0D  Detail Stock", currentView == ViewKey.DETAIL);
+        JButton btnArticles = ModernTheme.navButton("Articles", currentView == ViewKey.ARTICLES);
+        JButton btnMouvements = ModernTheme.navButton("Mouvements", currentView == ViewKey.MOUVEMENTS);
+        JButton btnGlobal = ModernTheme.navButton("Stock Global", currentView == ViewKey.GLOBAL);
+        JButton btnDetail = ModernTheme.navButton("Detail Stock", currentView == ViewKey.DETAIL);
 
         btnArticles.setEnabled(currentView != ViewKey.ARTICLES);
         btnMouvements.setEnabled(currentView != ViewKey.MOUVEMENTS);

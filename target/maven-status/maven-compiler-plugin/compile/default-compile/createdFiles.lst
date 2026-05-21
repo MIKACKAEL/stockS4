@@ -1,3 +1,4 @@
+com\mycompany\stocks4\service\ServisMouvementsStock$ValorisationSortieAvecSources.class
 com\mycompany\stocks4\view\VisualGlobalStockView$1.class
 com\mycompany\stocks4\view\ModernTheme.class
 com\mycompany\stocks4\view\NavigationSidebar$ViewKey.class
@@ -16,7 +17,9 @@ com\mycompany\stocks4\service\ServisMouvementsStock$GlobalStockRow.class
 com\mycompany\stocks4\view\VisualDétailleStockView$1.class
 com\mycompany\stocks4\view\ModernTheme$5.class
 com\mycompany\stocks4\view\MouvementsStockView$ArticleItem.class
+com\mycompany\stocks4\service\ServisMouvementsStock$SortieDecoupee.class
 com\mycompany\stocks4\view\VisualGlobalStockView$2.class
+com\mycompany\stocks4\service\ServisMouvementsStock$ValorisationSortieDepuisSource.class
 com\mycompany\stocks4\view\NavigationSidebar.class
 com\mycompany\stocks4\model\MouvementsStock.class
 com\mycompany\stocks4\model\TypeMouvementStock.class

@@ -56,8 +56,8 @@ public class VisualGlobalStockView extends JFrame {
         lblResume.setFont(ModernTheme.FONT_SUBTITLE);
         lblResume.setForeground(ModernTheme.TEXT_PRIMARY);
 
-        JButton btnActualiser = ModernTheme.secondaryButton("\u21BB Actualiser");
-        JButton btnDetail = ModernTheme.primaryButton("\uD83D\uDD0D Voir detail article");
+        JButton btnActualiser = ModernTheme.secondaryButton("Actualiser");
+        JButton btnDetail = ModernTheme.primaryButton("Voir detail article");
 
         top.add(lblResume);
         top.add(btnActualiser);
@@ -69,7 +69,7 @@ public class VisualGlobalStockView extends JFrame {
         contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // Header
-        contentPanel.add(ModernTheme.gradientHeader("\uD83D\uDCCA  Etat Global du Stock"), BorderLayout.NORTH);
+        contentPanel.add(ModernTheme.gradientHeader("Etat Global du Stock"), BorderLayout.NORTH);
 
         // Top (resume)
         JPanel topWrapper = new JPanel(new BorderLayout());

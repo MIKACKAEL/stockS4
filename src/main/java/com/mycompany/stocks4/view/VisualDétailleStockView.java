@@ -61,7 +61,7 @@ public class VisualDétailleStockView extends JFrame {
         lblResume.setFont(ModernTheme.FONT_SUBTITLE);
         lblResume.setForeground(ModernTheme.SUCCESS);
 
-        JButton btnActualiser = ModernTheme.secondaryButton("\u21BB Actualiser");
+        JButton btnActualiser = ModernTheme.secondaryButton("Actualiser");
 
         top.add(lblArticle);
         top.add(lblResume);
@@ -73,7 +73,7 @@ public class VisualDétailleStockView extends JFrame {
         contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // Header
-        contentPanel.add(ModernTheme.gradientHeader("\uD83D\uDD0D  Detail Stock - " + nomArticle), BorderLayout.NORTH);
+        contentPanel.add(ModernTheme.gradientHeader("Detail Stock - " + nomArticle), BorderLayout.NORTH);
 
         // Top (article info)
         JPanel topWrapper = new JPanel(new BorderLayout());
@@ -119,7 +119,7 @@ public class VisualDétailleStockView extends JFrame {
                 totalValeur = totalValeur.add(row.valeurLigne());
             }
 
-            lblResume.setText("\u2139  Stock actuel: " + totalQte + "  |  Valeur Stock: " + totalValeur);
+            lblResume.setText("Stock actuel: " + totalQte + "  |  Valeur Stock: " + totalValeur);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Chargement detail impossible: " + ex.getMessage(), "Erreur", JOptionPane.ERROR_MESSAGE);
         }

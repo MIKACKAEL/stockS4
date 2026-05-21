@@ -29,7 +29,6 @@ import javax.swing.table.DefaultTableModel;
 public class Articleview extends JFrame {
 
     private final ServisAticles servisAticles;
-    private final JTextField txtId;
     private final JTextField txtNom;
     private final JComboBox<ModeGestionStock> cmbMode;
     private final JTable tableArticles;
@@ -37,7 +36,6 @@ public class Articleview extends JFrame {
 
     public Articleview() {
         this.servisAticles = new ServisAticles();
-        this.txtId = new JTextField(8);
         this.txtNom = new JTextField(20);
         this.cmbMode = new JComboBox<>(ModeGestionStock.values());
         this.tableModel = new DefaultTableModel(new Object[]{"ID", "Nom Article", "Mode Gestion", "Date Creation"}, 0) {
@@ -68,20 +66,16 @@ public class Articleview extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Style inputs
-        txtId.setEditable(false);
-        ModernTheme.styleTextField(txtId);
         ModernTheme.styleTextField(txtNom);
         ModernTheme.styleComboBox(cmbMode);
 
         // Row 0 — Labels + Inputs
         gbc.gridy = 0;
-        gbc.gridx = 0; panelForm.add(ModernTheme.styledLabel("ID :"), gbc);
-        gbc.gridx = 1; panelForm.add(txtId, gbc);
-        gbc.gridx = 2; panelForm.add(ModernTheme.styledLabel("Nom :"), gbc);
-        gbc.gridx = 3; gbc.weightx = 1.0; panelForm.add(txtNom, gbc);
+        gbc.gridx = 0; panelForm.add(ModernTheme.styledLabel("Nom :"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1.0; panelForm.add(txtNom, gbc);
         gbc.weightx = 0;
-        gbc.gridx = 4; panelForm.add(ModernTheme.styledLabel("Mode :"), gbc);
-        gbc.gridx = 5; panelForm.add(cmbMode, gbc);
+        gbc.gridx = 2; panelForm.add(ModernTheme.styledLabel("Mode :"), gbc);
+        gbc.gridx = 3; panelForm.add(cmbMode, gbc);
 
         // Row 1 — Buttons
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -90,7 +84,7 @@ public class Articleview extends JFrame {
         JButton btnAjouter = ModernTheme.successButton("+ Ajouter");
         JButton btnModifier = ModernTheme.primaryButton("Modifier");
         JButton btnSupprimer = ModernTheme.dangerButton("Supprimer");
-        JButton btnActualiser = ModernTheme.secondaryButton("\u21BB Actualiser");
+        JButton btnActualiser = ModernTheme.secondaryButton("Actualiser");
         JButton btnVider = ModernTheme.secondaryButton("Vider");
 
         btnPanel.add(btnAjouter);
@@ -101,7 +95,7 @@ public class Articleview extends JFrame {
 
         gbc.gridy = 1;
         gbc.gridx = 0;
-        gbc.gridwidth = 6;
+        gbc.gridwidth = 4;
         gbc.insets = new Insets(12, 8, 6, 8);
         panelForm.add(btnPanel, gbc);
 
@@ -111,7 +105,7 @@ public class Articleview extends JFrame {
         contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // Header
-        contentPanel.add(ModernTheme.gradientHeader("\uD83D\uDCE6  Gestion des Articles"), BorderLayout.NORTH);
+        contentPanel.add(ModernTheme.gradientHeader("Gestion des Articles"), BorderLayout.NORTH);
 
         // Form
         JPanel formWrapper = new JPanel(new BorderLayout());
@@ -171,7 +165,6 @@ public class Articleview extends JFrame {
         if (selectedRow < 0) {
             return;
         }
-        txtId.setText(String.valueOf(tableModel.getValueAt(selectedRow, 0)));
         txtNom.setText(String.valueOf(tableModel.getValueAt(selectedRow, 1)));
         cmbMode.setSelectedItem(ModeGestionStock.valueOf(String.valueOf(tableModel.getValueAt(selectedRow, 2))));
     }
@@ -191,11 +184,12 @@ public class Articleview extends JFrame {
 
     private void updateArticle() {
         try {
-            if (txtId.getText().isBlank()) {
+            int selectedRow = tableArticles.getSelectedRow();
+            if (selectedRow < 0) {
                 showError("Selectionnez un article a modifier.");
                 return;
             }
-            int id = Integer.parseInt(txtId.getText());
+            int id = Integer.parseInt(String.valueOf(tableModel.getValueAt(selectedRow, 0)));
             String nom = txtNom.getText();
             ModeGestionStock mode = (ModeGestionStock) cmbMode.getSelectedItem();
             servisAticles.updateArticle(id, nom, mode);
@@ -209,7 +203,8 @@ public class Articleview extends JFrame {
 
     private void deleteArticle() {
         try {
-            if (txtId.getText().isBlank()) {
+            int selectedRow = tableArticles.getSelectedRow();
+            if (selectedRow < 0) {
                 showError("Selectionnez un article a supprimer.");
                 return;
             }
@@ -220,7 +215,7 @@ public class Articleview extends JFrame {
             if (confirm != JOptionPane.YES_OPTION) {
                 return;
             }
-            int id = Integer.parseInt(txtId.getText());
+            int id = Integer.parseInt(String.valueOf(tableModel.getValueAt(selectedRow, 0)));
             servisAticles.deleteArticle(id);
             loadArticles();
             clearForm();
@@ -231,7 +226,6 @@ public class Articleview extends JFrame {
     }
 
     private void clearForm() {
-        txtId.setText("");
         txtNom.setText("");
         cmbMode.setSelectedIndex(0);
         tableArticles.clearSelection();

@@ -13,7 +13,10 @@ import java.awt.Insets;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -39,6 +42,8 @@ public class MouvementsStockView extends JFrame {
     private final JTextField txtPrixUnitaire;
     private final JTextField txtSource;
 
+    private final DefaultTableModel tableModelBatch;
+    private final JTable tableBatch;
     private final DefaultTableModel tableModel;
     private final JTable tableMouvements;
 
@@ -51,6 +56,14 @@ public class MouvementsStockView extends JFrame {
         this.txtDate = new JTextField(LocalDate.now().toString(), 10);
         this.txtPrixUnitaire = new JTextField(10);
         this.txtSource = new JTextField(8);
+        this.tableModelBatch = new DefaultTableModel(
+                new Object[]{"Article", "Date", "Type", "Quantite", "PU", "Source"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        this.tableBatch = new JTable(tableModelBatch);
         this.tableModel = new DefaultTableModel(
                 new Object[]{"ID", "Article", "Date", "Type", "Quantite", "PU", "Valeur", "Stock Apres", "CUMP", "Source"}, 0) {
             @Override
@@ -109,10 +122,14 @@ public class MouvementsStockView extends JFrame {
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         btnPanel.setBackground(ModernTheme.BG_PANEL);
 
-        JButton btnEnregistrer = ModernTheme.successButton("\u2713 Enregistrer");
-        JButton btnActualiser = ModernTheme.secondaryButton("\u21BB Actualiser");
-        JButton btnGlobal = ModernTheme.primaryButton("\uD83D\uDCCA Voir Etat Global");
-        btnPanel.add(btnEnregistrer);
+        JButton btnAjouterLigne = ModernTheme.primaryButton("Ajouter ligne");
+        JButton btnRetirerLigne = ModernTheme.secondaryButton("Retirer ligne");
+        JButton btnValider = ModernTheme.successButton("Valider");
+        JButton btnActualiser = ModernTheme.secondaryButton("Actualiser");
+        JButton btnGlobal = ModernTheme.primaryButton("Voir Etat Global");
+        btnPanel.add(btnAjouterLigne);
+        btnPanel.add(btnRetirerLigne);
+        btnPanel.add(btnValider);
         btnPanel.add(btnActualiser);
         btnPanel.add(btnGlobal);
 
@@ -128,7 +145,7 @@ public class MouvementsStockView extends JFrame {
         contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // Header
-        contentPanel.add(ModernTheme.gradientHeader("\uD83D\uDD04  Mouvements de Stock"), BorderLayout.NORTH);
+        contentPanel.add(ModernTheme.gradientHeader("Mouvements de Stock"), BorderLayout.NORTH);
 
         // Form
         JPanel formWrapper = new JPanel(new BorderLayout());
@@ -142,10 +159,22 @@ public class MouvementsStockView extends JFrame {
         ModernTheme.styleTable(tableMouvements);
         JScrollPane scrollPane = ModernTheme.styledScrollPane(tableMouvements);
 
-        JPanel centerPanel = new JPanel(new BorderLayout(0, 10));
+        tableBatch.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        ModernTheme.styleTable(tableBatch);
+        JScrollPane scrollBatch = ModernTheme.styledScrollPane(tableBatch);
+
+        JPanel batchPanel = ModernTheme.formPanel("Mouvements a valider");
+        batchPanel.setLayout(new BorderLayout(0, 6));
+        batchPanel.add(scrollBatch, BorderLayout.CENTER);
+
+        JPanel centerPanel = new JPanel();
         centerPanel.setBackground(ModernTheme.BG_DARK);
-        centerPanel.add(formWrapper, BorderLayout.NORTH);
-        centerPanel.add(scrollPane, BorderLayout.CENTER);
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.add(formWrapper);
+        centerPanel.add(Box.createVerticalStrut(10));
+        centerPanel.add(batchPanel);
+        centerPanel.add(Box.createVerticalStrut(10));
+        centerPanel.add(scrollPane);
         contentPanel.add(centerPanel, BorderLayout.CENTER);
 
         add(contentPanel, BorderLayout.CENTER);
@@ -156,7 +185,9 @@ public class MouvementsStockView extends JFrame {
         // ── Events (logic unchanged) ────────────────────────────────────
         cmbType.addActionListener(e -> updatePrixUnitaireVisibility());
         cmbArticle.addActionListener(e -> loadMouvementsForSelectedArticle());
-        btnEnregistrer.addActionListener(e -> enregistrerMouvement());
+        btnAjouterLigne.addActionListener(e -> addLineToBatch());
+        btnRetirerLigne.addActionListener(e -> removeSelectedLine());
+        btnValider.addActionListener(e -> validerMouvementsBatch());
         btnActualiser.addActionListener(e -> {
             loadArticles();
             loadMouvementsForSelectedArticle();
@@ -219,7 +250,7 @@ public class MouvementsStockView extends JFrame {
         }
     }
 
-    private void enregistrerMouvement() {
+    private void addLineToBatch() {
         try {
             ArticleItem article = (ArticleItem) cmbArticle.getSelectedItem();
             if (article == null) {
@@ -240,19 +271,58 @@ public class MouvementsStockView extends JFrame {
                 source = Integer.valueOf(txtSource.getText().trim());
             }
 
-            MouvementsStock mouvement = servisMouvementsStock.createMouvement(
-                    article.id(), dateMouvement, type, quantite, puEntree, source);
-
-            showInfo("Mouvement enregistre. PU applique: " + mouvement.getPrixUnitaire()
-                    + " | Valeur totale: " + mouvement.getValeurTotal());
+            tableModelBatch.addRow(new Object[]{
+                article,
+                dateMouvement,
+                type,
+                quantite,
+                puEntree,
+                source
+            });
             txtQuantite.setText("");
             txtSource.setText("");
             if (type == TypeMouvementStock.ENTREE) {
                 txtPrixUnitaire.setText("");
             }
+        } catch (Exception ex) {
+            showError("Ajout de ligne impossible: " + ex.getMessage());
+        }
+    }
+
+    private void removeSelectedLine() {
+        int selectedRow = tableBatch.getSelectedRow();
+        if (selectedRow < 0) {
+            showError("Selectionnez une ligne a retirer.");
+            return;
+        }
+        tableModelBatch.removeRow(selectedRow);
+    }
+
+    private void validerMouvementsBatch() {
+        if (tableModelBatch.getRowCount() == 0) {
+            showError("Aucune ligne a valider.");
+            return;
+        }
+
+        try {
+            List<ServisMouvementsStock.BatchMouvementInput> inputs = new ArrayList<>();
+            for (int i = 0; i < tableModelBatch.getRowCount(); i++) {
+                ArticleItem article = (ArticleItem) tableModelBatch.getValueAt(i, 0);
+                Date dateMouvement = (Date) tableModelBatch.getValueAt(i, 1);
+                TypeMouvementStock type = (TypeMouvementStock) tableModelBatch.getValueAt(i, 2);
+                BigDecimal quantite = (BigDecimal) tableModelBatch.getValueAt(i, 3);
+                BigDecimal puEntree = (BigDecimal) tableModelBatch.getValueAt(i, 4);
+                Integer source = (Integer) tableModelBatch.getValueAt(i, 5);
+                inputs.add(new ServisMouvementsStock.BatchMouvementInput(
+                        article.id(), dateMouvement, type, quantite, puEntree, source));
+            }
+
+            List<MouvementsStock> mouvements = servisMouvementsStock.createMouvementsBatch(inputs);
+            showInfo("Validation terminee: " + mouvements.size() + " mouvements enregistres.");
+            tableModelBatch.setRowCount(0);
             loadMouvementsForSelectedArticle();
         } catch (Exception ex) {
-            showError("Enregistrement impossible: " + ex.getMessage());
+            showError("Validation impossible: " + ex.getMessage());
         }
     }
 
